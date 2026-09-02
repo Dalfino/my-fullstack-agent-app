@@ -1,0 +1,176 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { Project, ProjectFile, ExplainReport, AiReport } from '@talentshowcase/types';
+import { useAuth } from '@/lib/auth-context';
+import { apiClient } from '@/lib/api';
+import { Navbar } from '@/components/navbar';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+
+export default function ProjectDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  const { token, loading } = useAuth();
+  const router = useRouter();
+  const [project, setProject] = useState<Project | null>(null);
+  const [files, setFiles] = useState<ProjectFile[]>([]);
+  const [report, setReport] = useState<AiReport | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!loading && !token) router.push('/login');
+  }, [loading, token, router]);
+
+  useEffect(() => {
+    if (!token || !id) return;
+    apiClient
+      .get<Project>(`/projects/${id}`, token)
+      .then(setProject)
+      .catch(() => setError('Failed to load project'));
+    apiClient
+      .get<ProjectFile[]>(`/projects/${id}/files`, token)
+      .then(setFiles)
+      .catch(() => setFiles([]));
+    apiClient
+      .get<AiReport>(`/projects/${id}/ai/report`, token)
+      .then(setReport)
+      .catch(() => setReport(null));
+  }, [token, id]);
+
+  async function generateReport() {
+    setGenerating(true);
+    setError('');
+    try {
+      await apiClient.post(`/projects/${id}/ai/explain`, {}, token);
+      const fresh = await apiClient.get<AiReport>(`/projects/${id}/ai/report`, token);
+      setReport(fresh);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate report');
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  if (loading || !project) {
+    return <div className="flex min-h-screen items-center justify-center">Loading...</div>;
+  }
+
+  const explain = report?.reportJson as unknown as ExplainReport | undefined;
+
+  return (
+    <div className="min-h-screen">
+      <Navbar />
+      <main className="mx-auto max-w-5xl px-4 py-8">
+        <div className="mb-6 flex items-start justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <Badge>{project.type}</Badge>
+              <Badge variant="secondary">{project.status}</Badge>
+              <Badge variant="outline">{project.visibility}</Badge>
+            </div>
+            <h1 className="mt-3 text-3xl font-bold">{project.title}</h1>
+            <p className="mt-1 text-muted-foreground">{project.description}</p>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {(project.techStack ?? []).map((tech) => (
+                <Badge key={tech} variant="secondary">
+                  {tech}
+                </Badge>
+              ))}
+            </div>
+          </div>
+          {project.aiScore !== null && project.aiScore !== undefined && (
+            <div className="text-right">
+              <div className="text-4xl font-bold text-primary">{project.aiScore}</div>
+              <div className="text-xs text-muted-foreground">AI Score</div>
+            </div>
+          )}
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Files</CardTitle>
+              <CardDescription>{files.length} files uploaded</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {files.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No files uploaded yet. File upload is coming in the next phase.
+                </p>
+              ) : (
+                <ul className="divide-y">
+                  {files.map((file) => (
+                    <li key={file.id} className="flex items-center justify-between py-2 text-sm">
+                      <span className="font-mono">{file.path}</span>
+                      <span className="text-muted-foreground">
+                        {file.language ?? 'unknown'} · {file.lineCount ?? 0} lines
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>AI Report</CardTitle>
+                <Button size="sm" onClick={generateReport} disabled={generating}>
+                  {generating ? 'Generating...' : report ? 'Regenerate' : 'Generate'}
+                </Button>
+              </div>
+              <CardDescription>
+                {report
+                  ? `Generated by ${report.modelVersion ?? 'AI'} · confidence ${report.confidenceScore ?? 'N/A'}`
+                  : 'Generate an AI explanation of this project'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {error && <p className="mb-3 text-sm text-destructive">{error}</p>}
+              {!explain ? (
+                <p className="text-sm text-muted-foreground">
+                  No report yet. Click Generate to create an AI explanation.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="mb-1 text-sm font-semibold">Executive Summary</h4>
+                    <p className="text-sm">{explain.executiveSummary}</p>
+                  </div>
+                  <div>
+                    <h4 className="mb-1 text-sm font-semibold">For Managers</h4>
+                    <p className="text-sm">{explain.managerSummary}</p>
+                  </div>
+                  <div>
+                    <h4 className="mb-1 text-sm font-semibold">For Peers</h4>
+                    <p className="text-sm">{explain.peerSummary}</p>
+                  </div>
+                  <div>
+                    <h4 className="mb-1 text-sm font-semibold">Analogies</h4>
+                    <ul className="list-disc pl-5 text-sm">
+                      {explain.analogies.map((a, i) => (
+                        <li key={i}>{a}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <h4 className="mb-1 text-sm font-semibold">Key Highlights</h4>
+                    <ul className="list-disc pl-5 text-sm">
+                      {explain.keyHighlights.map((h, i) => (
+                        <li key={i}>{h}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </main>
+    </div>
+  );
+}

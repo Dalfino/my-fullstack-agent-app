@@ -1,0 +1,26 @@
+{
+  "name": "talentshowcase",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Enterprise internal talent showcase & AI-powered review platform",
+  "packageManager": "pnpm@10.32.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "predev": "pnpm --filter @talentshowcase/types build",
+    "dev": "pnpm --parallel --filter @talentshowcase/api --filter @talentshowcase/web dev",
+    "dev:api": "pnpm --filter @talentshowcase/api dev",
+    "dev:web": "pnpm --filter @talentshowcase/web dev",
+    "prebuild": "pnpm --filter @talentshowcase/types build",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "pretypecheck": "pnpm --filter @talentshowcase/types build",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "prettier": "^3.3.3"
+  }
+}
