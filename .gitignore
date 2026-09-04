@@ -34,3 +34,7 @@ pnpm-debug.log*
 # Vault / secrets
 secrets/
 *.pem
+# Embedded postgres / local storage / vendored libs (dockerless dev)
+.pgdata/
+.storage/
+.pglibs/

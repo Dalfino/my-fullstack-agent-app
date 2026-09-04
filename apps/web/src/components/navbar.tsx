@@ -15,7 +15,13 @@ export function Navbar() {
   const links = [
     { href: '/discover', label: 'Discover' },
     { href: '/submit', label: 'Submit' },
+    { href: '/radar', label: 'Skill Radar' },
+    { href: '/settings', label: 'Settings' },
   ];
+
+  if (user.role === 'HR_ADMIN' || user.role === 'DEPT_HEAD') {
+    links.push({ href: '/admin', label: 'Admin' });
+  }
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">

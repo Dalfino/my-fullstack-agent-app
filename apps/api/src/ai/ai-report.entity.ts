@@ -14,12 +14,17 @@ export class AiReport {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'project_id', type: 'uuid' })
-  projectId: string;
+  /** Null for user-scoped reports (career advisor). */
+  @Column({ name: 'project_id', type: 'uuid', nullable: true })
+  projectId?: string | null;
 
   @ManyToOne(() => Project)
   @JoinColumn({ name: 'project_id' })
   project: Project;
+
+  /** Owning user when the report is user-scoped (career advisor). */
+  @Column({ name: 'user_id', type: 'uuid', nullable: true })
+  userId?: string | null;
 
   @Column({ name: 'agent_type', type: 'text' })
   agentType: AgentType;

@@ -2,13 +2,19 @@ import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/commo
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Review } from './review.entity';
-import { CreateReviewInput, ReviewStatus, ReviewDecisionInput } from '@talentshowcase/types';
+import { AuditAction, CreateReviewInput, ReviewDecisionInput, ReviewStatus } from '@talentshowcase/types';
+import { ProjectsService } from '../projects/projects.service';
+import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class ReviewsService {
   constructor(
     @InjectRepository(Review)
     private readonly reviewRepo: Repository<Review>,
+    private readonly projectsService: ProjectsService,
+    private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async create(reviewerId: string, input: CreateReviewInput): Promise<Review> {
@@ -17,7 +23,23 @@ export class ReviewsService {
       reviewerId,
       status: ReviewStatus.PENDING_APPROVAL,
     });
-    return this.reviewRepo.save(review);
+    const saved = await this.reviewRepo.save(review);
+
+    const project = await this.projectsService.findById(input.projectId);
+    await this.audit.log({
+      actorId: reviewerId,
+      action: AuditAction.REVIEW_CREATED,
+      entityType: 'review',
+      entityId: saved.id,
+      context: { projectId: input.projectId, recommendation: input.recommendation },
+    });
+    await this.notifications.notifyUser(project.ownerId, 'review:created', {
+      projectId: input.projectId,
+      reviewId: saved.id,
+      recommendation: input.recommendation,
+    });
+
+    return saved;
   }
 
   async findByProject(projectId: string): Promise<Review[]> {
@@ -40,6 +62,22 @@ export class ReviewsService {
       input.decision === 'APPROVE' ? ReviewStatus.APPROVED : ReviewStatus.REJECTED;
     review.actedBy = actorId;
     review.actedAt = new Date();
-    return this.reviewRepo.save(review);
+    const saved = await this.reviewRepo.save(review);
+
+    await this.audit.log({
+      actorId,
+      action: AuditAction.REVIEW_DECIDED,
+      entityType: 'review',
+      entityId: id,
+      context: { decision: input.decision, note: input.note },
+    });
+    if (review.projectId) {
+      await this.notifications.notifyProject(review.projectId, 'review:decided', {
+        reviewId: id,
+        decision: input.decision,
+      });
+    }
+
+    return saved;
   }
 }

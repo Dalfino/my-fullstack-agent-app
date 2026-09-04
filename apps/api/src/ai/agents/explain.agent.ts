@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ExplainReport, ExplainReportSchema } from '@talentshowcase/types';
-import { LlmClient } from './llm.client';
+import { LlmClient } from '../llm.client';
 
 export interface ExplainContext {
   title: string;

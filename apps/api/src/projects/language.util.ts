@@ -1,0 +1,41 @@
+/** Best-effort language detection from a file path. */
+export function detectLanguage(path: string): string {
+  const ext = path.slice(path.lastIndexOf('.')).toLowerCase();
+  const map: Record<string, string> = {
+    '.ts': 'typescript',
+    '.tsx': 'typescript',
+    '.js': 'javascript',
+    '.jsx': 'javascript',
+    '.mjs': 'javascript',
+    '.cjs': 'javascript',
+    '.py': 'python',
+    '.rb': 'ruby',
+    '.go': 'go',
+    '.rs': 'rust',
+    '.java': 'java',
+    '.kt': 'kotlin',
+    '.swift': 'swift',
+    '.c': 'c',
+    '.h': 'c',
+    '.cpp': 'cpp',
+    '.hpp': 'cpp',
+    '.cs': 'csharp',
+    '.php': 'php',
+    '.sh': 'shell',
+    '.bash': 'shell',
+    '.sql': 'sql',
+    '.html': 'html',
+    '.htm': 'html',
+    '.css': 'css',
+    '.scss': 'scss',
+    '.json': 'json',
+    '.yml': 'yaml',
+    '.yaml': 'yaml',
+    '.toml': 'toml',
+    '.md': 'markdown',
+    '.r': 'r',
+    '.ipynb': 'jupyter-notebook',
+    '.dockerfile': 'docker',
+  };
+  return map[ext] ?? 'plaintext';
+}

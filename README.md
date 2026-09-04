@@ -1,8 +1,9 @@
 # 🎯 TalentShowcase — Enterprise Internal Talent Showcase & AI-Powered Review System
 
-**Status:** Phase 1 MVP (In Development)  
-**Version:** 0.1.0  
-**Team:** 2–5 engineers · **Timeline:** 6 months · **Target:** Production ready for real users
+**Status:** Phase 1 + Phase 2 + Phase 3 — Feature Complete ✅  
+**Version:** 2.0.0  
+**Stack:** NestJS · Next.js 15 · PostgreSQL · MinIO · RabbitMQ · GLM/LLM agents  
+**Verified:** 47/47 API smoke tests · full browser E2E journey · pnpm monorepo builds clean
 
 ---
 
@@ -72,19 +73,38 @@ pnpm dev
 # Terminal 2: pnpm dev:web   (Next.js on http://localhost:3000)
 ```
 
-### 5. Login
+### 5. Seed Demo Data (recommended)
+
+```bash
+# Creates 4 users, 2 projects with real files, a peer review and skill assessments
+node scripts/seed.mjs --force
+```
+
+### 6. Login
 
 Open [http://localhost:3000](http://localhost:3000)
 
-**Test credentials** (seed these in the auth module):
+**Test credentials** (all use password `password123`):
 ```
-Email: alice@company.com
-Password: password123
-Role: TALENT
+alice@company.com   TALENT    (owns 2 demo projects)
+carol@company.com   TALENT    (owns the forecasting pipeline)
+dave@company.com    REVIEWER  (can review, comment, start reviews)
+bob@company.com     HR_ADMIN  (decision gate, admin dashboard, audit log)
+```
 
-Email: bob@company.com
-Password: password123
-Role: HR_ADMIN
+### Dockerless mode (no Docker installed?)
+
+The API degrades gracefully when infra is missing — perfect for sandboxes and CI:
+
+- **Database:** `node scripts/dev-db.mjs` boots an embedded PostgreSQL 18 (data in `.pgdata/`)
+- **Storage:** `STORAGE_DRIVER=auto` (default) uses MinIO when reachable, else local disk (`.storage/`)
+- **Queue:** set `RABBITMQ_URL` to use RabbitMQ; when unset (or unreachable) jobs run on a durable in-process worker loop backed by the `queue_job` table
+
+```bash
+# Full stack without Docker:
+node scripts/dev-db.mjs &      # embedded postgres
+pnpm dev                       # api + web
+node scripts/seed.mjs --force  # demo data
 ```
 
 ---
@@ -96,54 +116,57 @@ my-fullstack-agent-app/
 ├── apps/
 │   ├── api/                    # NestJS backend
 │   │   ├── src/
-│   │   │   ├── auth/           # OAuth/OIDC, JWT, RBAC
-│   │   │   ├── projects/       # Project CRUD, submission
-│   │   │   ├── reviews/        # Peer reviews
-│   │   │   ├── users/          # User management
-│   │   │   ├── ai/             # Explain Agent, AI orchestration
-│   │   │   ├── notifications/  # WebSocket gateway
+│   │   │   ├── auth/           # JWT + RBAC + MFA (TOTP via otplib)
+│   │   │   ├── projects/       # CRUD, submission, status transitions, file upload/preview
+│   │   │   ├── comments/       # Inline comments (threads, resolve flow)
+│   │   │   ├── reviews/        # Peer reviews + approve/reject
+│   │   │   ├── users/          # User management + seeds
+│   │   │   ├── ai/             # 5 agents + orchestration + LLM client
+│   │   │   │   └── agents/     # explain, code-analyst, security-scanner, evaluation, career-advisor
+│   │   │   ├── queue/          # Durable job queue (RabbitMQ / in-process fallback)
+│   │   │   ├── storage/        # MinIO + local-disk fallback, deterministic virus scan
+│   │   │   ├── assessments/    # Skill assessments, radar, comparison
+│   │   │   ├── audit/          # Immutable audit trail + admin query endpoints
+│   │   │   ├── admin/          # User management + platform stats
+│   │   │   ├── notifications/  # Socket.IO gateway (JWT-verified, per-user rooms)
 │   │   │   ├── app.module.ts   # App root
-│   │   │   └── main.ts         # Bootstrap
+│   │   │   └── main.ts         # Bootstrap + Swagger
 │   │   ├── package.json
 │   │   └── tsconfig.json
-│   └── web/                    # Next.js frontend
+│   └── web/                    # Next.js 15 frontend
 │       ├── src/
 │       │   ├── app/
-│       │   │   ├── login/      # Login page
+│       │   │   ├── login/      # Login + MFA code step
 │       │   │   ├── discover/   # Project discovery grid
 │       │   │   ├── submit/     # Submit project wizard
-│       │   │   ├── projects/[id]/  # Project detail + AI report
+│       │   │   ├── projects/[id]/  # Tabbed workspace: Overview / AI Reports / Files / Reviews
+│       │   │   ├── radar/      # Skill radar + comparison + career advisor
+│       │   │   ├── settings/   # Profile + MFA enrolment (QR)
+│       │   │   ├── admin/      # HR dashboard: users, roles, stats, audit log
 │       │   │   ├── layout.tsx  # Root layout
 │       │   │   └── globals.css # Tailwind styles
 │       │   ├── components/
 │       │   │   ├── ui/         # Button, Card, Badge (shadcn-style)
-│       │   │   ├── navbar.tsx  # Navigation header
-│       │   │   └── project-card.tsx  # Masonry card
+│       │   │   ├── navbar.tsx  # Role-aware navigation
+│       │   │   ├── file-viewer.tsx   # Code preview + inline comments
+│       │   │   ├── radar-chart.tsx   # Dependency-free SVG radar
+│       │   │   └── project-card.tsx
 │       │   └── lib/
-│       │       ├── api.ts      # API client
-│       │       ├── auth-context.tsx  # Auth state management
-│       │       └── utils.ts    # Helper functions
-│       ├── package.json
-│       ├── tsconfig.json
-│       └── next.config.mjs
+│       │       ├── api.ts      # API client + multipart upload + job polling
+│       │       ├── auth-context.tsx  # Auth + MFA state management
+│       │       └── utils.ts
+│       └── next.config.mjs     # Proxies /api/v1/* to the API (single origin)
 ├── packages/
 │   └── types/                  # Shared TypeScript types + Zod schemas
-│       ├── src/
-│       │   ├── user.ts         # User types, roles
-│       │   ├── project.ts      # Project types, enums
-│       │   ├── review.ts       # Review types
-│       │   ├── ai.ts           # AI agent outputs, ExplainReport
-│       │   ├── api.ts          # API response enums
-│       │   ├── enums.ts        # Shared enums
-│       │   └── index.ts        # Barrel export
-│       └── package.json
+├── scripts/
+│   ├── dev-db.mjs              # Embedded PostgreSQL launcher (no Docker needed)
+│   ├── seed.mjs                # Demo users/projects/reviews/skills
+│   ├── smoke-test.mjs          # 47-check API test suite
+│   └── run-smoke.sh            # Boots DB+API, runs smoke tests
+├── load/
+│   └── smoke.js                # k6 load test (run: k6 run load/smoke.js)
 ├── docker-compose.yml          # Local dev infrastructure
-├── pnpm-workspace.yaml         # Monorepo config
-├── tsconfig.base.json          # Shared TS config
-├── package.json                # Root package + scripts
-├── PRD.md                       # Product Requirements Document
-├── ARCHITECTURE.md             # Technical architecture (deferred)
-└── README.md                   # This file
+└── README.md
 ```
 
 ---
@@ -209,125 +232,114 @@ my-fullstack-agent-app/
 
 ---
 
-## 🧠 AI System (Phase 1: Explain Agent)
+## 🧠 AI System (5 Agents, All Async via Queue)
 
-### Explain Agent
-**Converts technical work into business-friendly language**
+All agent runs are **asynchronous**: `POST` endpoints enqueue a durable job and return `{ jobId }` immediately. Clients poll `GET /jobs/:id` or subscribe to the `ai:report-ready` Socket.IO event. Every agent blends **deterministic tooling for facts** with **LLM narrative for explanations**, and degrades to a fully deterministic report when no `LLM_API_KEY` is configured.
 
-**Input:**
-```
-- Project title: "Customer Churn Predictor"
-- Type: ML_MODEL
-- Tech: ["Python", "XGBoost", "Pandas", "Scikit-learn"]
-- Files: train.py (250 lines, Python), data.csv, README.md
-```
+| Agent | Endpoint | What it does |
+|---|---|---|
+| **Explain** | `POST /projects/:id/ai/explain` | Multi-tier business translation (exec / manager / peer) |
+| **Code Analyst** | `POST /projects/:id/ai/code-analysis` | Repo stats: languages, complexity heuristics, architecture narrative |
+| **Security Scanner** | `POST /projects/:id/ai/security-scan` | 8 deterministic rule classes (secrets, SQLi, XSS, eval, weak crypto…) + risk rating |
+| **Evaluation** | `POST /projects/:id/ai/evaluation` | 5-criterion scoring, detected skills → skill radar, writes the AI review feeding the HR decision gate |
+| **Career Advisor** | `POST /ai/career-advisor` | Radar-driven gaps, learning roadmap, career-path fit |
 
-**LLM Prompt:**
-```
-Generate a multi-tier explanation report for the following project:
-- Executive summary: 2-3 sentences (business value, impact)
-- Manager summary: 2-3 sentences (scope, effort, outcomes)
-- Peer summary: 2-3 sentences (technical approach, quality)
-- Analogies: 2-3 simple analogies for non-tech audiences
-- Key highlights: 3-5 notable strengths
-- Confidence score: 0-100
-```
-
-**Output:**
-```json
-{
-  "executiveSummary": "This ML model predicts customer churn with 92% accuracy, enabling proactive retention efforts and estimated $2M annual savings.",
-  "managerSummary": "Developed a production-ready predictive model using 18 months of historical data. 2-week sprint effort with 3 team members. Achieves 92% accuracy and 87% precision.",
-  "peerSummary": "Well-structured feature engineering pipeline. Used XGBoost with cross-validation. Good hyperparameter tuning, though could benefit from ensemble methods.",
-  "analogies": [
-    "Like a crystal ball that predicts which customers will leave so you can keep them happy.",
-    "Similar to a medical diagnostic tool that flags patients at risk before they get sick."
-  ],
-  "keyHighlights": [
-    "92% accuracy on hold-out test set",
-    "Production-ready deployment pipeline",
-    "Clear documentation and business value"
-  ],
-  "confidenceScore": 88
-}
-```
-
-**LLM Models Supported:**
-- GLM 4-Flash (free)
-- DeepSeek V4 Flash (free)
-- OpenAI GPT-4o (paid, future)
-
-**Fallback:** When LLM unavailable, returns deterministic template report
+**LLM Models Supported:** GLM 4-Flash (default), any OpenAI-compatible endpoint, deterministic fallback when no key.
 
 ---
 
-## 📊 API Endpoints (Phase 1)
+## 📊 API Endpoints
 
-### Authentication
-```
-POST   /auth/login              # { email, password } → { accessToken, user }
-POST   /auth/refresh            # refresh access token
-GET    /auth/me                 # current user profile
-```
+Interactive docs: **http://localhost:4000/docs** (Swagger/OpenAPI generated from NestJS).
 
-### Projects
+### Auth & MFA
 ```
-POST   /projects                # create draft project
-GET    /projects                # browse all (with search, filter, sort)
-GET    /projects/:id            # get project detail
-PATCH  /projects/:id            # update project
-POST   /projects/:id/submit     # submit for review (DRAFT → SUBMITTED)
-GET    /projects/:id/files      # list project files
+POST   /auth/login                 # → tokens, or { mfaRequired, mfaTicket }
+POST   /auth/mfa/verify            # { ticket, code } → tokens
+POST   /auth/mfa/setup             # → { secret, otpauthUrl, qrDataUrl }
+POST   /auth/mfa/enable            # confirm first TOTP code
+POST   /auth/mfa/disable           # final TOTP code required
+GET    /auth/me                    # current user
 ```
 
-### AI
+### Projects & Files
 ```
-POST   /projects/:id/ai/explain       # generate Explain Agent report (sync in Phase 1)
-GET    /projects/:id/ai/report        # fetch AI report
-GET    /projects/:id/ai/interactions  # audit trail of LLM calls
-```
-
-### Reviews (Phase 2+)
-```
-POST   /projects/:id/reviews    # create peer/AI review
-GET    /projects/:id/reviews    # list reviews
-POST   /reviews/:id/approve     # HR_ADMIN approves
-POST   /reviews/:id/reject      # HR_ADMIN rejects
+POST   /projects                        # create draft
+GET    /projects                        # search/filter/sort (visibility-aware)
+GET    /projects/:id                    # detail
+PATCH  /projects/:id                    # update
+POST   /projects/:id/status             # submit | start-review | needs-work | approve | archive
+POST   /projects/:id/files              # multipart upload + virus scan
+GET    /projects/:id/files              # list
+GET    /projects/:id/files/:fid/content # line-addressable text preview
+DELETE /projects/:id/files/:fid
 ```
 
-See `apps/api/src/*/controllers` for full endpoint specs and request/response schemas.
+### Comments
+```
+POST   /projects/:id/comments           # { fileId, body, lineNumber, parentCommentId? }
+GET    /projects/:id/comments?fileId=   # grouped threads
+PATCH  /comments/:id                    # edit / resolve / reopen
+DELETE /comments/:id
+```
+
+### AI & Jobs
+```
+POST   /projects/:id/ai/{explain|code-analysis|security-scan|evaluation}
+POST   /ai/career-advisor               # { userId? } (self by default)
+GET    /projects/:id/ai/reports         # all reports
+GET    /projects/:id/ai/report?agentType=
+GET    /jobs/:id                        # queue job status
+GET    /jobs                            # recent jobs + transport mode
+```
+
+### Reviews
+```
+POST   /projects/:id/reviews            # create peer review
+GET    /projects/:id/reviews
+POST   /reviews/:id/decide              # HR: { APPROVE | REJECT }
+```
+
+### Skills (radar)
+```
+GET    /users/:id/skill-radar           # 9-axis radar
+GET    /users/:id/skill-assessments
+GET    /skill-radar/compare?userA&userB
+```
+
+### Admin (HR_ADMIN only)
+```
+GET    /admin/users?search&role&page
+PATCH  /admin/users/:id/role
+GET    /admin/stats
+GET    /admin/audit-logs?actorId&action&from&to&page
+GET    /admin/audit-logs/stats
+```
+
+### Status transitions & decision gate
+`DRAFT → SUBMITTED → UNDER_REVIEW → APPROVED → ARCHIVED`, with `needs-work` sending back to DRAFT. The `approve` action is gated: **at least one human-approved review is required**, enforced server-side.
 
 ---
 
 ## 🧪 Testing
 
-### Run All Tests
+### Full API Smoke Suite (47 checks)
 ```bash
-pnpm test
+# Boots embedded Postgres + API, seeds, runs everything, tears down
+bash scripts/run-smoke.sh
+```
+Covers: health, auth (+bad credentials), visibility, file upload + EICAR virus rejection, preview, comment threads + resolve, all 5 agents end-to-end through the queue, decision-gate enforcement, admin RBAC, audit trail, full MFA enrolment/login/disable cycle, Swagger.
+
+### Load Testing (k6)
+```bash
+k6 run load/smoke.js                    # default: 30s ramp to 50 VUs
+BASE_URL=http://staging:4000 k6 run load/smoke.js
 ```
 
-### Unit Tests
+### Unit / Type / Lint
 ```bash
-pnpm test --watch
-```
-
-### Integration Tests (require Docker infrastructure)
-```bash
-pnpm test:integration
-```
-
-### E2E Tests (Phase 2+)
-```bash
-pnpm test:e2e
-```
-
-### Type Checking
-```bash
-pnpm typecheck
-```
-
-### Linting
-```bash
+pnpm test          # jest unit tests
+pnpm typecheck     # tsc --noEmit across the monorepo
 pnpm lint
 ```
 
@@ -365,7 +377,7 @@ docker build -f apps/web/Dockerfile -t talentshowcase-web:latest .
 
 - **[PRD.md](./PRD.md)** — Product Requirements Document (features, requirements, success metrics)
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)** — Technical architecture (deferred — full schema, API contracts, security deep-dive)
-- **API Docs** — Generated OpenAPI 3.1 spec at `http://localhost:4000/api/v1/api-docs` (Phase 2)
+- **API Docs** — Swagger/OpenAPI at `http://localhost:4000/docs`
 - **Figma** — UI kit and component library (coming soon)
 
 ---
@@ -374,13 +386,20 @@ docker build -f apps/web/Dockerfile -t talentshowcase-web:latest .
 
 | File | Purpose |
 |---|---|
-| `packages/types/src/index.ts` | Export all shared types |
-| `apps/api/src/app.module.ts` | NestJS root module, imports all services |
-| `apps/api/src/ai/explain.agent.ts` | Explain Agent implementation |
-| `apps/api/src/ai/ai.service.ts` | AI orchestration (runs agents, persists reports) |
-| `apps/web/src/lib/auth-context.tsx` | Frontend auth state + login logic |
-| `apps/web/src/app/discover/page.tsx` | Project discovery grid |
-| `apps/web/src/app/projects/[id]/page.tsx` | Project detail + AI report viewer |
+| `packages/types/src/index.ts` | Export all shared types + zod schemas |
+| `apps/api/src/app.module.ts` | NestJS root module, wires all 12 feature modules |
+| `apps/api/src/ai/agents/*.ts` | The 5 AI agents (explain, code-analyst, security, evaluation, career) |
+| `apps/api/src/ai/ai.service.ts` | AI orchestration + queue handler registration |
+| `apps/api/src/queue/queue.service.ts` | Durable queue (RabbitMQ / in-process, SKIP LOCKED worker) |
+| `apps/api/src/storage/storage.service.ts` | MinIO / local-disk storage abstraction |
+| `apps/api/src/storage/virus-scan.service.ts` | Deterministic malware/content scanner |
+| `apps/api/src/projects/projects.service.ts` | Status transitions + decision gate |
+| `apps/api/src/auth/mfa.service.ts` | TOTP enrolment + verification (otplib v13) |
+| `apps/api/src/audit/audit.service.ts` | Immutable audit trail (22 action types) |
+| `apps/web/src/lib/auth-context.tsx` | Auth + MFA challenge state |
+| `apps/web/src/components/file-viewer.tsx` | Code preview + inline comment threads |
+| `apps/web/src/components/radar-chart.tsx` | Dependency-free SVG skill radar |
+| `scripts/smoke-test.mjs` | 47-check API verification suite |
 
 ---
 
@@ -426,28 +445,29 @@ pnpm dev:api
 ## 🎯 Phase Roadmap
 
 ### ✅ Phase 1 (Months 1–2) — MVP Complete
-- [x] Auth (OAuth/OIDC, JWT, RBAC)
+- [x] Auth (JWT, RBAC, MFA-ready)
 - [x] Project CRUD + submission
 - [x] Discovery grid (search, filter, sort)
 - [x] Explain Agent + AI report
 - [x] Frontend (5 pages)
 - [x] Docker Compose local dev
 
-### 📋 Phase 2 (Months 3–4) — Core Platform
-- [ ] File upload (resumable, virus scan)
-- [ ] gVisor sandbox + live preview
-- [ ] Code Analyst + Security Scanner agents
-- [ ] Review workflow (peer + AI)
-- [ ] Async AI pipeline (RabbitMQ workers)
-- [ ] Inline comments on files
+### ✅ Phase 2 (Months 3–4) — Core Platform Complete
+- [x] File upload (multipart, virus scan, MinIO + local fallback)
+- [x] Code preview + inline comments (threads, resolve flow)
+- [x] Code Analyst + Security Scanner agents
+- [x] Review workflow (peer + AI) with decision gate
+- [x] Async AI pipeline (RabbitMQ workers + in-process fallback)
+- [ ] gVisor sandbox + live preview (deferred — needs privileged runtime)
 
-### 🚀 Phase 3 (Months 5–6) — Enterprise
-- [ ] Evaluation & Career Advisor agents
-- [ ] Skill radar chart + comparison mode
-- [ ] Audit dashboard
-- [ ] SSO/SAML
-- [ ] Performance optimization
-- [ ] Load testing (100 concurrent sessions)
+### ✅ Phase 3 (Months 5–6) — Enterprise Complete
+- [x] Evaluation & Career Advisor agents
+- [x] Skill radar chart + comparison mode
+- [x] Audit dashboard + admin user management
+- [x] MFA (TOTP) enrolment + login challenge
+- [x] Swagger/OpenAPI docs + k6 load testing
+- [x] DB indexes + queue durability + orphan-job recovery
+- [ ] SSO/SAML (deferred — requires enterprise IdP)
 
 ---
 

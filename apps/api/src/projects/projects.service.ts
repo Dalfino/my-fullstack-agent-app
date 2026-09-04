@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Project } from './project.entity';
 import { ProjectFile } from './project-file.entity';
+import { Review } from '../reviews/review.entity';
 import {
   CreateProjectInput,
   UpdateProjectInput,
@@ -11,6 +12,13 @@ import {
   ProjectStatus,
 } from '@talentshowcase/types';
 
+export type ProjectStatusAction =
+  | 'submit'
+  | 'start-review'
+  | 'needs-work'
+  | 'approve'
+  | 'archive';
+
 @Injectable()
 export class ProjectsService {
   constructor(
@@ -18,6 +26,8 @@ export class ProjectsService {
     private readonly projectRepo: Repository<Project>,
     @InjectRepository(ProjectFile)
     private readonly fileRepo: Repository<ProjectFile>,
+    @InjectRepository(Review)
+    private readonly reviewRepo: Repository<Review>,
   ) {}
 
   async create(ownerId: string, input: CreateProjectInput): Promise<Project> {
@@ -86,8 +96,100 @@ export class ProjectsService {
     return this.projectRepo.save(project);
   }
 
+  /**
+   * Phase 3 status transition engine with decision gate.
+   *
+   * Allowed moves:
+   *   DRAFT        -> SUBMITTED            (owner)
+   *   SUBMITTED    -> UNDER_REVIEW         (REVIEWER / HR_ADMIN / DEPT_HEAD)
+   *   UNDER_REVIEW -> DRAFT (needs work)   (REVIEWER / HR_ADMIN / DEPT_HEAD)
+   *   UNDER_REVIEW -> APPROVED  [decision gate: requires >=1 approved review]
+   *   APPROVED     -> ARCHIVED             (HR_ADMIN / DEPT_HEAD / owner)
+   */
+  async changeStatus(
+    projectId: string,
+    action: ProjectStatusAction,
+    actor: { sub: string; email: string; role: string },
+    note?: string,
+  ): Promise<{ project: Project; previousStatus: ProjectStatus }> {
+    const project = await this.findById(projectId);
+    const previousStatus = project.status;
+    const isOwner = project.ownerId === actor.sub;
+    const isReviewer = actor.role === 'REVIEWER';
+    const isExec = actor.role === 'HR_ADMIN' || actor.role === 'DEPT_HEAD';
+
+    const fail = (msg: string): never => {
+      throw new ForbiddenException(msg);
+    };
+
+    switch (action) {
+      case 'submit':
+        if (!isOwner && !isExec) fail('Only the project owner can submit this project');
+        this.assertTransition(previousStatus, ProjectStatus.DRAFT);
+        project.status = ProjectStatus.SUBMITTED;
+        break;
+      case 'start-review':
+        if (!isReviewer && !isExec) fail('Only reviewers or HR can start a review');
+        this.assertTransition(previousStatus, ProjectStatus.SUBMITTED);
+        project.status = ProjectStatus.UNDER_REVIEW;
+        break;
+      case 'needs-work':
+        if (!isReviewer && !isExec) fail('Only reviewers or HR can send a project back');
+        this.assertTransition(previousStatus, ProjectStatus.UNDER_REVIEW);
+        project.status = ProjectStatus.DRAFT;
+        break;
+      case 'approve': {
+        if (!isExec) fail('Only HR or department heads can approve projects');
+        this.assertTransition(previousStatus, ProjectStatus.UNDER_REVIEW);
+        // Decision gate: at least one approved human review required
+        const reviews = await this.reviewRepo.find({ where: { projectId } });
+        const hasApprovedReview = reviews.some(
+          (r) =>
+            r.reviewType !== 'AI' &&
+            r.status === 'APPROVED' &&
+            r.recommendation !== 'REJECT',
+        );
+        if (!hasApprovedReview) {
+          fail('Decision gate: at least one approved human review is required before approval');
+        }
+        project.status = ProjectStatus.APPROVED;
+        break;
+      }
+      case 'archive':
+        if (!isExec && !isOwner) fail('Only HR, department heads or the owner can archive');
+        this.assertTransition(previousStatus, ProjectStatus.APPROVED);
+        project.status = ProjectStatus.ARCHIVED;
+        break;
+      default:
+        fail('Unknown status action');
+    }
+
+    const saved = await this.projectRepo.save(project);
+    return { project: saved, previousStatus };
+  }
+
+  private assertTransition(from: ProjectStatus, to: ProjectStatus): void {
+    if (from !== to) {
+      throw new ForbiddenException(
+        `Invalid transition: cannot ${to === ProjectStatus.DRAFT ? 'send back' : 'move to ' + to} from ${from}`,
+      );
+    }
+  }
+
   async getFiles(projectId: string): Promise<ProjectFile[]> {
     return this.fileRepo.find({ where: { projectId } });
+  }
+
+  async getFile(projectId: string, fileId: string): Promise<ProjectFile> {
+    const file = await this.fileRepo.findOneBy({ id: fileId, projectId });
+    if (!file) {
+      throw new NotFoundException('File not found on this project');
+    }
+    return file;
+  }
+
+  async deleteFile(projectId: string, fileId: string): Promise<void> {
+    await this.fileRepo.delete({ id: fileId, projectId });
   }
 
   async addFile(projectId: string, file: Partial<ProjectFile>): Promise<ProjectFile> {

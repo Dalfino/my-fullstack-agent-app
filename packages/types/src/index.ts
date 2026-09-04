@@ -3,4 +3,8 @@ export * from './user';
 export * from './project';
 export * from './review';
 export * from './ai';
+export * from './comment';
+export * from './audit';
+export * from './assessment';
+export * from './job';
 export * from './api';

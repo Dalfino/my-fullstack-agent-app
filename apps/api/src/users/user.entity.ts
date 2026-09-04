@@ -30,6 +30,10 @@ export class User {
   @Column({ name: 'mfa_enabled', default: false })
   mfaEnabled: boolean;
 
+  /** TOTP shared secret (base32). Only set during setup / when MFA is on. */
+  @Column({ name: 'mfa_secret', select: false, nullable: true })
+  mfaSecret?: string;
+
   @Column({ name: 'passkey_registered', default: false })
   passkeyRegistered: boolean;
 
@@ -42,7 +46,7 @@ export class User {
   @Column({ name: 'manager_id', type: 'uuid', nullable: true })
   managerId?: string;
 
-  @Column({ select: false, nullable: true })
+  @Column({ select: false, nullable: true, name: 'password_hash' })
   passwordHash?: string;
 
   @CreateDateColumn({ name: 'created_at' })

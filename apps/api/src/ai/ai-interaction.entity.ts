@@ -14,8 +14,9 @@ export class AiInteraction {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'project_id', type: 'uuid' })
-  projectId: string;
+  /** Null for user-scoped interactions (career advisor). */
+  @Column({ name: 'project_id', type: 'uuid', nullable: true })
+  projectId?: string | null;
 
   @ManyToOne(() => Project)
   @JoinColumn({ name: 'project_id' })
