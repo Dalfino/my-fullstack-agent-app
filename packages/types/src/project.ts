@@ -17,6 +17,8 @@ export interface Project {
   aiSummary?: string | null;
   aiScore?: number | null;
   aiReportJson?: Record<string, unknown> | null;
+  /** Visual showcase profile — may differ from `type` when overridden by the owner. */
+  showcaseKind?: ProjectType | null;
   version: number;
   parentProjectId?: string | null;
   createdAt: string | Date;
@@ -46,6 +48,7 @@ export const UpdateProjectSchema = CreateProjectSchema.extend({
   aiSummary: z.string().max(5000).optional(),
   aiScore: z.number().min(0).max(100).optional(),
   aiReportJson: z.record(z.unknown()).optional(),
+  showcaseKind: z.nativeEnum(ProjectType).optional(),
 }).partial();
 
 export type UpdateProjectInput = z.infer<typeof UpdateProjectSchema>;

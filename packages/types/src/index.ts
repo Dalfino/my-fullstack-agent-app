@@ -7,4 +7,5 @@ export * from './comment';
 export * from './audit';
 export * from './assessment';
 export * from './job';
+export * from './showcase';
 export * from './api';

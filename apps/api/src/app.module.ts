@@ -14,6 +14,7 @@ import { QueueModule } from './queue/queue.module';
 import { AuditModule } from './audit/audit.module';
 import { AdminModule } from './admin/admin.module';
 import { AssessmentsModule } from './assessments/assessments.module';
+import { ShowcaseModule } from './showcase/showcase.module';
 import { HealthController } from './health.controller';
 import { User } from './users/user.entity';
 import { Project } from './projects/project.entity';
@@ -25,6 +26,7 @@ import { Comment } from './comments/comment.entity';
 import { AuditLog } from './audit/audit-log.entity';
 import { QueueJob } from './queue/queue-job.entity';
 import { SkillAssessment } from './assessments/skill-assessment.entity';
+import { ShowcaseBlock } from './showcase/showcase-block.entity';
 
 @Module({
   imports: [
@@ -49,6 +51,7 @@ import { SkillAssessment } from './assessments/skill-assessment.entity';
           AuditLog,
           QueueJob,
           SkillAssessment,
+          ShowcaseBlock,
         ],
         synchronize: config.get<string>('NODE_ENV') !== 'production',
         autoLoadEntities: true,
@@ -76,6 +79,7 @@ import { SkillAssessment } from './assessments/skill-assessment.entity';
     AiModule,
     AssessmentsModule,
     AdminModule,
+    ShowcaseModule,
   ],
   controllers: [HealthController],
 })

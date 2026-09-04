@@ -89,6 +89,7 @@ export const JobType = {
   AI_EVALUATION: 'AI_EVALUATION',
   AI_CAREER_ADVISOR: 'AI_CAREER_ADVISOR',
   VIRUS_SCAN: 'VIRUS_SCAN',
+  SHOWCASE_BUILD: 'SHOWCASE_BUILD',
 } as const;
 export type JobType = (typeof JobType)[keyof typeof JobType];
 

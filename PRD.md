@@ -450,6 +450,15 @@ pnpm dev
 - [x] DB indexes on hot query paths
 - Deferred: SSO/SAML (needs enterprise IdP)
 
+### Phase A (Showcase) — Visual Storytelling ✅ DELIVERED
+- [x] Showcase blocks: STORY (AI), GALLERY, NOTEBOOK (pre-executed outputs only), TERMINAL replay, OPENAPI endpoint explorer
+- [x] Auto-assembly pipeline on the queue (`SHOWCASE_BUILD`): file scan → blocks → AI story; rebuilds preserve user blocks
+- [x] Project Showcase tab with drag-reorder, block delete, manual terminal/gallery blocks, kind override (visual profile)
+- [x] Discover hybrid hero: featured carousel (top 3 by approval/score) + visual card grid with hero thumbnails
+- [x] Raw file endpoint for authed image rendering; payload zod-validated on write AND read
+- Deferred to Phase B: CSV→chart engine, ML metric cards/confusion-matrix renderer, Mermaid architecture auto-gen, before/after slider, Figma embeds
+- Deferred to Phase C: sandboxed live preview (static-site iframes first, container-based later)
+
 ---
 
 ## 16. Anti-Patterns (NEVER do these)

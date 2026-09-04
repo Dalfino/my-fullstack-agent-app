@@ -54,6 +54,8 @@ export const apiClient = {
     api<T>(path, { method: 'POST', body, token }),
   patch: <T>(path: string, body?: unknown, token?: string | null) =>
     api<T>(path, { method: 'PATCH', body, token }),
+  put: <T>(path: string, body?: unknown, token?: string | null) =>
+    api<T>(path, { method: 'PUT', body, token }),
   del: <T>(path: string, token?: string | null) => api<T>(path, { method: 'DELETE', token }),
 
   /** Multipart file upload (field name "files"). */

@@ -232,6 +232,23 @@ my-fullstack-agent-app/
 
 ---
 
+## ✦ Showcase — Visual Storytelling (Phase A)
+
+Every project gets a **Showcase tab**: an auto-assembled, type-aware visual story that non-technical teammates can actually read.
+
+| Block | What it shows | How it's built |
+|---|---|---|
+| ✦ Story | One headline + 3 plain-language bullets | Storyteller agent (LLM, deterministic fallback) |
+| 🖼 Gallery | Screenshots / charts uploaded to the project | Auto-detected image files |
+| 📓 Notebook | Jupyter notebook with **saved outputs** (charts, tables) — code is never executed | `.ipynb` parsed on build |
+| ▮ Terminal | Animated replay of a CLI run or log | `*.log`/`output` files, or pasted by hand |
+| { } API Explorer | Every endpoint of an OpenAPI/Swagger spec as a card | `openapi.yaml` / `swagger.json` detected |
+
+- Rebuilds are async (`SHOWCASE_BUILD` on the queue) and preserve custom blocks; owners can drag-reorder, delete, add blocks, and override the visual profile.
+- Discover renders a **featured hero carousel** (top 3 by approval/score) above a visual card grid with live thumbnails.
+
+---
+
 ## 🧠 AI System (5 Agents, All Async via Queue)
 
 All agent runs are **asynchronous**: `POST` endpoints enqueue a durable job and return `{ jobId }` immediately. Clients poll `GET /jobs/:id` or subscribe to the `ai:report-ready` Socket.IO event. Every agent blends **deterministic tooling for facts** with **LLM narrative for explanations**, and degrades to a fully deterministic report when no `LLM_API_KEY` is configured.

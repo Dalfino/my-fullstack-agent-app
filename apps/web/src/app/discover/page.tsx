@@ -7,12 +7,14 @@ import { useAuth } from '@/lib/auth-context';
 import { apiClient } from '@/lib/api';
 import { Navbar } from '@/components/navbar';
 import { ProjectCard } from '@/components/project-card';
+import { HeroCarousel } from '@/components/hero-carousel';
 import { Button } from '@/components/ui/button';
 
 export default function DiscoverPage() {
   const { token, loading } = useAuth();
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
+  const [heroes, setHeroes] = useState<Record<string, string | null>>({});
   const [search, setSearch] = useState('');
   const [type, setType] = useState('');
   const [page, setPage] = useState(1);
@@ -33,9 +35,18 @@ export default function DiscoverPage() {
     if (type) params.set('type', type);
     apiClient
       .get<Paginated<Project>>(`/projects?${params.toString()}`, token)
-      .then((res) => {
+      .then(async (res) => {
         setProjects(res.items);
         setTotalPages(res.totalPages);
+        const ids = res.items.map((p) => p.id).join(',');
+        if (ids) {
+          const map = await apiClient
+            .get<Record<string, string | null>>(`/showcase/hero-images?ids=${ids}`, token)
+            .catch(() => ({}));
+          setHeroes(map ?? {});
+        } else {
+          setHeroes({});
+        }
       })
       .catch(() => setProjects([]))
       .finally(() => setFetching(false));
@@ -49,11 +60,11 @@ export default function DiscoverPage() {
     <div className="min-h-screen">
       <Navbar />
       <main className="mx-auto max-w-7xl px-4 py-8">
-        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-3xl font-bold">Discover Talent</h1>
             <p className="text-muted-foreground">
-              Browse technical work products from across the company
+              Every project told visually — screenshots, notebooks, API explorers and terminal replays
             </p>
           </div>
           <div className="flex gap-3">
@@ -85,6 +96,13 @@ export default function DiscoverPage() {
           </div>
         </div>
 
+        {/* Featured hero carousel */}
+        {!search && !type && (
+          <div className="mb-8">
+            <HeroCarousel />
+          </div>
+        )}
+
         {fetching ? (
           <div className="py-20 text-center text-muted-foreground">Loading projects...</div>
         ) : projects.length === 0 ? (
@@ -94,7 +112,11 @@ export default function DiscoverPage() {
         ) : (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {projects.map((project) => (
-              <ProjectCard key={project.id} project={project} />
+              <ProjectCard
+                key={project.id}
+                project={project}
+                heroFileId={heroes[project.id] ?? null}
+              />
             ))}
           </div>
         )}

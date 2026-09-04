@@ -61,6 +61,10 @@ export class Project {
   @Column({ name: 'ai_report_json', type: 'jsonb', nullable: true })
   aiReportJson?: Record<string, unknown>;
 
+  /** Visual showcase profile (auto-detected, user-overridable). */
+  @Column({ name: 'showcase_kind', type: 'text', nullable: true })
+  showcaseKind?: ProjectType | null;
+
   @Column({ default: 1 })
   version: number;
 

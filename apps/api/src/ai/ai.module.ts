@@ -34,6 +34,6 @@ import { UsersModule } from '../users/users.module';
     AiService,
   ],
   controllers: [AiController, CareerAdvisorController],
-  exports: [AiService],
+  exports: [AiService, LlmClient],
 })
 export class AiModule {}

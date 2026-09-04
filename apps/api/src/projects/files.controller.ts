@@ -24,6 +24,7 @@ import { VirusScanService } from '../storage/virus-scan.service';
 import { AuditService } from '../audit/audit.service';
 import { QueueService } from '../queue/queue.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { JobType } from '@talentshowcase/types';
 import { detectLanguage } from './language.util';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
@@ -122,6 +123,13 @@ export class FilesController {
       files: saved.map((f) => f.path),
     });
 
+    // Refresh the visual showcase with the new files (async, non-blocking).
+    // Enqueued via the global QueueService to avoid a module cycle with
+    // ShowcaseModule (which imports ProjectsModule for file access).
+    await this.queue
+      .enqueue(JobType.SHOWCASE_BUILD, { projectId }, { projectId, requestedById: req.user.sub })
+      .catch(() => undefined);
+
     return { uploaded: saved.length, files: saved };
   }
 
@@ -129,6 +137,21 @@ export class FilesController {
   async list(@Param('projectId') projectId: string) {
     await this.projectsService.findById(projectId);
     return this.projectsService.getFiles(projectId);
+  }
+
+  /**
+   * Raw binary download (images for showcase galleries, etc.). Returns the
+   * exact stored bytes with the recorded MIME type.
+   */
+  @Get(':fileId/raw')
+  async raw(
+    @Param('projectId') projectId: string,
+    @Param('fileId') fileId: string,
+    @Res() res: Response,
+  ) {
+    const file = await this.projectsService.getFile(projectId, fileId);
+    const buffer = await this.storage.get(file.s3Key);
+    res.type(file.mimeType || 'application/octet-stream').send(buffer);
   }
 
   @Get(':fileId/content')

@@ -17,11 +17,12 @@ import { useAuth } from '@/lib/auth-context';
 import { apiClient, waitForJob } from '@/lib/api';
 import { Navbar } from '@/components/navbar';
 import { FileViewer } from '@/components/file-viewer';
+import { ShowcaseView } from '@/components/showcase/showcase-view';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
-type Tab = 'overview' | 'ai' | 'files' | 'reviews';
+type Tab = 'showcase' | 'overview' | 'ai' | 'files' | 'reviews';
 
 const AGENTS = [
   { key: 'explain', label: 'Explain', endpoint: 'explain' },
@@ -46,7 +47,7 @@ export default function ProjectDetailPage() {
   const [files, setFiles] = useState<ProjectFile[]>([]);
   const [reports, setReports] = useState<AiReport[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
-  const [tab, setTab] = useState<Tab>('overview');
+  const [tab, setTab] = useState<Tab>('showcase');
   const [busyAgent, setBusyAgent] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [statusError, setStatusError] = useState('');
@@ -188,6 +189,7 @@ export default function ProjectDetailPage() {
   const evalReport = reportFor('REVIEW_EVALUATION')?.reportJson as unknown as EvaluationReport | undefined;
 
   const tabs: Array<{ key: Tab; label: string }> = [
+    { key: 'showcase', label: '✦ Showcase' },
     { key: 'overview', label: 'Overview' },
     { key: 'ai', label: `AI Reports (${reports.length})` },
     { key: 'files', label: `Files (${files.length})` },
@@ -269,6 +271,15 @@ export default function ProjectDetailPage() {
         </div>
 
         {error && <p className="mb-4 text-sm text-destructive">{error}</p>}
+
+        {/* Showcase — type-aware visual story (first tab) */}
+        {tab === 'showcase' && (
+          <ShowcaseView
+            projectId={id}
+            canEdit={Boolean(isOwner || isExec)}
+            imageFiles={files.filter((f) => /\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(f.path))}
+          />
+        )}
 
         {/* Overview */}
         {tab === 'overview' && (

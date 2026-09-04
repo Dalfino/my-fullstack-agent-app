@@ -249,7 +249,99 @@ async function main() {
   const disable = await req('POST', '/auth/mfa/disable', { token: verify.data.accessToken, body: { code: code3 } });
   check('mfa disable', disable.data?.mfaEnabled === false);
 
-  console.log('\n== Swagger & docs ==');
+  console.log('\n== Showcase (Phase A) ==');
+  const designProject = list.data.items.find((p) => p.title === 'Nimbus Brand Refresh Kit');
+  const mlProject = list.data.items.find((p) => p.title === 'Customer Churn Prediction Model');
+  check('demo kind-set present', !!designProject && !!mlProject);
+
+  const featured = await req('GET', '/showcase/featured?limit=3', { token: aliceToken });
+  check('featured carousel', featured.status === 200 && featured.data?.length === 3, JSON.stringify(featured.data?.length));
+  check(
+    'featured leads with approved/high-scored',
+    featured.data?.[0]?.project?.title === 'Nimbus Brand Refresh Kit' ||
+      featured.data?.[0]?.project?.aiScore >= 80,
+    featured.data?.[0]?.project?.title,
+  );
+  const designShowcase = await req('GET', `/projects/${designProject.id}/showcase`, { token: aliceToken });
+  check(
+    'seeded showcase: story first + gallery',
+    designShowcase.status === 200 &&
+      designShowcase.data?.blocks?.[0]?.kind === 'STORY' &&
+      designShowcase.data.blocks.some((b) => b.kind === 'GALLERY'),
+    JSON.stringify(designShowcase.data?.blocks?.map((b) => b.kind)),
+  );
+  const designGallery = designShowcase.data?.blocks?.find((b) => b.kind === 'GALLERY');
+  check('gallery payload valid', designGallery?.payload?.items?.length === 3, JSON.stringify(designGallery?.payload?.items?.length));
+
+  const heroMap = await req('GET', `/showcase/hero-images?ids=${designProject.id},${projectId}`, { token: aliceToken });
+  check('hero images resolve', heroMap.status === 200 && !!heroMap.data?.[designProject.id], JSON.stringify(heroMap.data));
+
+  const rawHero = await fetch(`${BASE}/projects/${designProject.id}/files/${designGallery.payload.items[0].fileId}/raw`, {
+    headers: { Authorization: `Bearer ${aliceToken}` },
+  });
+  check('raw image endpoint', rawHero.status === 200 && (rawHero.headers.get('content-type') ?? '').startsWith('image/'), rawHero.headers.get('content-type'));
+
+  // pipeline: upload a real PNG, rebuild, expect GALLERY block
+  const PNG_1PX = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+    'base64',
+  );
+  const pngUpload = await fetch(`${BASE}/projects/${projectId}/files`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${aliceToken}` },
+    body: (() => {
+      const fd = new FormData();
+      fd.append('files', new File([PNG_1PX], 'img/preview.png', { type: 'image/png' }));
+      return fd;
+    })(),
+  });
+  check('png upload ok', pngUpload.status < 300);
+
+  const gen = await req('POST', `/projects/${projectId}/showcase/generate`, { token: aliceToken });
+  check('showcase generate enqueued', gen.status === 201 || gen.status === 200, JSON.stringify(gen.data));
+  const genJob = await waitJob(gen.data?.jobId, aliceToken);
+  check('showcase build done', genJob.status === 'DONE', genJob.error ?? genJob.status);
+
+  const built = await req('GET', `/projects/${projectId}/showcase`, { token: aliceToken });
+  const builtKinds = built.data?.blocks?.map((b) => b.kind) ?? [];
+  check('build produced story + gallery', builtKinds.includes('STORY') && builtKinds.includes('GALLERY'), builtKinds.join(','));
+
+  const terminalAdd = await req('POST', `/projects/${projectId}/showcase/blocks`, {
+    token: aliceToken,
+    body: { kind: 'TERMINAL', payload: { command: 'node src/app.js', lines: ['$ node src/app.js', 'hello smoke'] } },
+  });
+  check('manual terminal block', terminalAdd.status === 201 || terminalAdd.status === 200, JSON.stringify(terminalAdd.data));
+  check('foreign gallery rejected', (await req('POST', `/projects/${projectId}/showcase/blocks`, {
+    token: aliceToken,
+    body: { kind: 'GALLERY', payload: { items: [{ fileId: designGallery.payload.items[0].fileId }] } },
+  })).status >= 400);
+
+  const afterAdd = await req('GET', `/projects/${projectId}/showcase`, { token: aliceToken });
+  const ids = afterAdd.data.blocks.map((b) => b.id);
+  const reordered = await req('PUT', `/projects/${projectId}/showcase/reorder`, {
+    token: aliceToken,
+    body: { orderedIds: [...ids].reverse() },
+  });
+  check('reorder persisted', reordered.status === 200 && reordered.data?.[0]?.id === ids[ids.length - 1]);
+
+  const wrongSet = await req('PUT', `/projects/${projectId}/showcase/reorder`, {
+    token: aliceToken,
+    body: { orderedIds: ['00000000-0000-4000-8000-000000000000'] },
+  });
+  check('reorder mismatch rejected', wrongSet.status >= 400);
+
+  const delBlock = afterAdd.data.blocks.find((b) => b.kind === 'GALLERY');
+  const delRes = await req('DELETE', `/projects/${projectId}/showcase/blocks/${delBlock.id}`, { token: aliceToken });
+  const afterDel = await req('GET', `/projects/${projectId}/showcase`, { token: aliceToken });
+  check('block deleted', delRes.status === 200 && afterDel.data.blocks.every((b) => b.id !== delBlock.id));
+
+  const kindChange = await req('PUT', `/projects/${projectId}/showcase/kind`, {
+    token: aliceToken,
+    body: { kind: 'ML_MODEL' },
+  });
+  check('showcase kind override', kindChange.status === 200 && kindChange.data?.kind === 'ML_MODEL', JSON.stringify(kindChange.data?.kind));
+
+  console.log('\n== Docs ==');
   const docs = await fetch('http://localhost:4000/docs').then((r) => r.status);
   check('swagger docs served', docs === 200 || docs === 304, `status ${docs}`);
 
